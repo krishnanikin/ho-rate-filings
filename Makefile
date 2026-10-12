@@ -61,10 +61,35 @@ create_environment:
 #################################################################################
 
 
-## Make dataset
+## Download raw data (TX/FL/CA filings, FEMA, NOAA, FHFA, FRED, FIO) into data/raw
 .PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) ho_rate_filings/dataset.py
+data:
+	$(PYTHON_INTERPRETER) -m ho_rate_filings.dataset download
+	$(PYTHON_INTERPRETER) -m ho_rate_filings.dataset process
+
+## Build analysis tables in data/processed
+.PHONY: features
+features:
+	$(PYTHON_INTERPRETER) -m ho_rate_filings.features
+
+## Fit COVID-period, disaster/housing, event-study and break models (models/)
+.PHONY: train
+train:
+	$(PYTHON_INTERPRETER) -m ho_rate_filings.modeling.train
+
+## Render static figures to reports/figures
+.PHONY: plots
+plots:
+	$(PYTHON_INTERPRETER) -m ho_rate_filings.plots
+
+## Run the full pipeline: data -> features -> train -> plots
+.PHONY: pipeline
+pipeline: data features train plots
+
+## Launch the Streamlit dashboard
+.PHONY: dashboard
+dashboard:
+	streamlit run dashboard/app.py
 
 
 #################################################################################

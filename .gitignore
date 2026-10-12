@@ -2,6 +2,7 @@
 /data/*/*
 !/data/*/.gitkeep
 !/data/external/state_regimes.csv
+!/data/external/gao_approval_days.csv
 
 # Mac OS-specific storage files
 .DS_Store

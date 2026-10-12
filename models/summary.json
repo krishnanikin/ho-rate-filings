@@ -1,0 +1,18 @@
+{
+  "n_filings": 8556,
+  "n_top10": 2433,
+  "states": [
+    "CA",
+    "FL",
+    "TX"
+  ],
+  "significant_driver_terms": [
+    "Approved rate change (%) | Storm damage per resident, prior year ($100s)",
+    "Approved rate change (%) | Post-COVID (2020+)",
+    "Approved rate change (%) | Storm damage per resident, prior year ($100s)",
+    "Approved rate change (%) | Post-COVID (2020+)",
+    "Log days to approval | Post-COVID (2020+)",
+    "Premium growth (%) | Storm damage per resident, prior year ($000)",
+    "Loss ratio | Storm damage per resident, same year ($000)"
+  ]
+}
