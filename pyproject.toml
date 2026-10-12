@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "ho_rate_filings"
+version = "0.0.1"
+description = "Homeowners rate filings of the top-10 US insurers by state (2016-present): regulatory regime, rejections, time to approval, rating variables, and links to disasters and the housing market."
+authors = [
+  { name = "Krishna Desikan" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = "~=3.11.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["ho_rate_filings"]
+include = ["pyproject.toml", "ho_rate_filings/**/*.py", "dashboard/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["ho_rate_filings"]
+force-sort-within-sections = true
+
