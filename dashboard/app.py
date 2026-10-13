@@ -147,7 +147,6 @@ tabs = st.tabs(
         "Overview",
         "States & regimes",
         "Company comparison",
-        "Rating variables",
         "Pre vs post COVID",
         "Disasters & housing",
         "Data & methods",
@@ -469,84 +468,9 @@ with tabs[2]:
     )
 
 # ---------------------------------------------------------------------------
-# 4. Rating variables
+# 4. Pre vs post COVID
 # ---------------------------------------------------------------------------
 with tabs[3]:
-    st.subheader("Rating variables")
-    st.info(
-        "Rating variables live in filing documents (actuarial memoranda and rate manuals), not in "
-        "the published filing lists. California's WARFF serves documents on request and Florida's "
-        "IRFS documents sit behind a CAPTCHA, which this project does not automate. The table "
-        "below lists the variables that homeowners filings commonly use and what recent public "
-        "sources say about them; extending it to company-level extraction needs the documents "
-        "downloaded through the regulators' own viewers."
-    )
-    variables = pd.DataFrame(
-        [
-            (
-                "Coverage A amount (dwelling)",
-                "Exposure",
-                "Universal base; replacement-cost estimators drive the 2021–23 jumps",
-            ),
-            (
-                "Territory / ZIP",
-                "Location",
-                "Universal; prior-approval states scrutinize territorial relativities",
-            ),
-            ("Protection class (fire dept.)", "Location", "Standard ISO-style factor"),
-            ("Distance to coast", "Catastrophe", "Hurricane states (FL, TX, LA, SC)"),
-            (
-                "Wildfire risk score",
-                "Catastrophe",
-                "Western states; CA's 2022 regulation requires mitigation discounts",
-            ),
-            (
-                "Hail zone / wind-hail deductible",
-                "Catastrophe",
-                "Plains and TX; percentage deductibles spreading",
-            ),
-            (
-                "Catastrophe-model load",
-                "Catastrophe",
-                "CA allowed modeled wildfire losses from 2025 (Sustainable Insurance Strategy)",
-            ),
-            (
-                "Net cost of reinsurance",
-                "Cost",
-                "CA allowed it from 2025; FL filings rely heavily on it",
-            ),
-            (
-                "Roof age / material",
-                "Property",
-                "Fast-growing factor; FL roof-age rules after 2022 reforms",
-            ),
-            ("Age of home", "Property", "Common"),
-            ("Construction type", "Property", "Frame vs masonry"),
-            ("Deductible (all-peril)", "Policy", "Universal"),
-            (
-                "Prior claims history",
-                "Policyholder",
-                "Common; some states limit use of weather claims",
-            ),
-            (
-                "Credit-based insurance score",
-                "Policyholder",
-                "Banned or limited for homeowners in CA, MA, MD, HI",
-            ),
-            ("Protective devices / smart home", "Policyholder", "Discounts"),
-            ("Multi-policy discount", "Policyholder", "Universal"),
-        ],
-        columns=["Variable", "Type", "Notes"],
-    )
-    st.dataframe(variables, use_container_width=True, hide_index=True)
-    st.caption(
-        "Sources: GAO-26-107867 App. IV (determination of premiums); FIO (2025); state regulator bulletins."
-    )
-
-# ---------------------------------------------------------------------------
-# 5. Pre vs post COVID
-# ---------------------------------------------------------------------------
-with tabs[4]:
     st.subheader(f"Before ({START_YEAR}–{COVID_BREAK - 1}) vs after ({COVID_BREAK}–{max_year})")
     pc = D["period_comparison"]
     if not pc.empty:
@@ -638,9 +562,9 @@ with tabs[4]:
     st.plotly_chart(style(fig, 340, "Year-over-year change (%)"), use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# 6. Disasters & housing
+# 5. Disasters & housing
 # ---------------------------------------------------------------------------
-with tabs[5]:
+with tabs[4]:
     st.subheader("Is there a connection?")
     coefs = D["driver_models"]
     if not coefs.empty:
@@ -760,9 +684,9 @@ with tabs[5]:
     )
 
 # ---------------------------------------------------------------------------
-# 7. Data & methods
+# 6. Data & methods
 # ---------------------------------------------------------------------------
-with tabs[6]:
+with tabs[5]:
     st.subheader("Coverage")
     cov = filings.groupby(["state", "year"]).size().unstack("year").fillna(0).astype(int)
     st.dataframe(cov, use_container_width=True)

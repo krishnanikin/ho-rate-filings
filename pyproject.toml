@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "ho_rate_filings"
 version = "0.0.1"
-description = "Homeowners rate filings of the top-10 US insurers by state (2016-present): regulatory regime, rejections, time to approval, rating variables, and links to disasters and the housing market."
+description = "Homeowners rate filings of the top-10 US insurers by state (2016-present): regulatory regime, rejections, time to approval, and links to disasters and the housing market."
 authors = [
   { name = "Krishna Desikan" },
 ]

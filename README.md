@@ -72,15 +72,13 @@ approval-time bins, the FIO premium data and the disaster/housing panel.
 - **Florida** search results carry no % changes (they are in documents behind a CAPTCHA, not automated).
 - **California** received date = WARFF public-notice date (posted shortly after receipt), matched for
   96% of filings. Two single days with more than 50 notices lost their overflow rows.
-- **Rating variables** are in filing documents, not the published lists; the dashboard lists the common
-  variables with sources rather than company-level extraction.
 - The FIO regime classification (2018–22) is applied to the whole 2016–26 window.
 
 ## Project organization
 
 ```
 ├── Makefile               <- `make pipeline`, `make dashboard`, `make test`, ...
-├── dashboard/app.py       <- Streamlit dashboard (7 tabs)
+├── dashboard/app.py       <- Streamlit dashboard (6 tabs)
 ├── data/
 │   ├── external/          <- state_regimes.csv (curated), gao_approval_days.csv
 │   ├── raw/               <- cached downloads (git-ignored)

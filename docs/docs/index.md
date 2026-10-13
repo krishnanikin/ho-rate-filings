@@ -2,7 +2,7 @@
 
 ## Description
 
-Homeowners rate filings of the top-10 US insurers by state (2016-present): regulatory regime, rejections, time to approval, rating variables, and links to disasters and the housing market.
+Homeowners rate filings of the top-10 US insurers by state (2016-present): regulatory regime, rejections, time to approval, and links to disasters and the housing market.
 
 ## Commands
 
