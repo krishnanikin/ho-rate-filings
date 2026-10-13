@@ -91,6 +91,7 @@ def period_comparison(filings: pd.DataFrame) -> pd.DataFrame:
             rec[f"{name}_filings_per_year"] = len(sub) / max(years[flag], 1)
             rec[f"{name}_mean_requested_pct"] = sub["requested_pct"].mean()
             rec[f"{name}_mean_approved_pct"] = sub["approved_pct"].mean()
+            rec[f"{name}_median_approved_pct"] = sub["approved_pct"].median()
             rec[f"{name}_broad_rejection_rate"] = disp["is_rejected_broad"].mean()
             rec[f"{name}_median_days_to_approval"] = sub["days_to_approval"].median()
         a, b = pre["approved_pct"].dropna(), post["approved_pct"].dropna()

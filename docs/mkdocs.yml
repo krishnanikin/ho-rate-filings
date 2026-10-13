@@ -1,4 +1,6 @@
 site_name: ho-rate-filings
-# 
 site_author: Krishna Desikan
-# 
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Appendix: appendix.md

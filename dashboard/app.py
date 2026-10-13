@@ -155,6 +155,7 @@ tabs = st.tabs(
         "Pre vs post COVID",
         "Disasters & housing",
         "Data & methods",
+        "Appendix",
     ]
 )
 
@@ -163,7 +164,7 @@ tabs = st.tabs(
 # ---------------------------------------------------------------------------
 with tabs[0]:
     disp = rate_top[rate_top["dispositioned"]]
-    k = st.columns(5)
+    k = st.columns(6)
     k[0].metric(
         "Top-10 rate filings", num(len(rate_top)), help="CA, FL and TX, selected years and groups"
     )
@@ -185,7 +186,13 @@ with tabs[0]:
     k[4].metric(
         "Mean approved change",
         num(rate_top["approved_pct"].mean(), "{:+.1f}%"),
-        help="CA and TX (FL does not publish % changes in search results)",
+        help="Average of approved filing-level changes, CA and TX (FL does not publish % changes). "
+        "See Appendix: mean vs median.",
+    )
+    k[5].metric(
+        "Median approved change",
+        num(rate_top["approved_pct"].median(), "{:+.1f}%"),
+        help="Middle approved filing: half of approved changes were larger, half smaller.",
     )
 
     left, right = st.columns([3, 2])
@@ -721,6 +728,7 @@ with tabs[4]:
             for measure, key in [
                 ("Rate filings per year", "filings_per_year"),
                 ("Mean approved change (%)", "mean_approved_pct"),
+                ("Median approved change (%)", "median_approved_pct"),
                 ("Broad rejection rate (%)", "broad_rejection_rate"),
                 ("Median days to approval", "median_days_to_approval"),
             ]:
@@ -954,3 +962,88 @@ negotiated rejections). *Haircut* = approved below requested. *Days to approval*
 filings. Top-10 groups are matched by NAIC group code (FL, CA) or affiliate names (TX).
 """
     )
+
+# ---------------------------------------------------------------------------
+# 8. Appendix
+# ---------------------------------------------------------------------------
+with tabs[7]:
+    st.subheader("Mean vs median approved rate change — explore")
+    c1, c2, c3 = st.columns([1, 2, 1])
+    ex_state = c1.selectbox("State", ["CA", "TX"], key="ex_state")
+    ex_years = c2.slider("Received", START_YEAR, max_year, (2023, 2023), key="ex_years")
+    ex_top = c3.toggle("Top-10 groups only", value=True, key="ex_top")
+    ex = filings[
+        (filings["state"] == ex_state)
+        & filings["is_rate"].fillna(False)
+        & (filings["outcome"] == "approved")
+        & filings["approved_pct"].notna()
+        & filings["year"].between(*ex_years)
+    ]
+    if ex_top:
+        ex = ex[ex["top10"]]
+    if ex.empty:
+        st.info("No approved rate filings with a published % for this selection.")
+    else:
+        mean_v, median_v = ex["approved_pct"].mean(), ex["approved_pct"].median()
+        k = st.columns(3)
+        k[0].metric("Approved rate filings", len(ex))
+        k[1].metric(
+            "Mean approved change", f"{mean_v:+.1f}%", help="Sum of approved % ÷ number of filings"
+        )
+        k[2].metric(
+            "Median approved change",
+            f"{median_v:+.1f}%",
+            help="Middle value of the sorted approved %",
+        )
+        rng = np.random.default_rng(0)
+        fig = go.Figure(
+            go.Scatter(
+                x=ex["approved_pct"],
+                y=rng.uniform(-0.3, 0.3, len(ex)),
+                mode="markers",
+                marker={
+                    "size": 9,
+                    "color": SLOTS[0],
+                    "opacity": 0.75,
+                    "line": {"color": "white", "width": 1},
+                },
+                customdata=ex[["company", "filing_id", "requested_pct"]],
+                hovertemplate="%{customdata[0]}<br>Filing %{customdata[1]}<br>Requested %{customdata[2]:.1f}% · approved %{x:.1f}%<extra></extra>",
+                showlegend=False,
+            )
+        )
+        # Label each line on its outer side so close values do not collide.
+        mean_side = "left" if mean_v >= median_v else "right"
+        median_side = "right" if mean_side == "left" else "left"
+        for value, label, color, side in [
+            (mean_v, "Mean", SLOTS[1], mean_side),
+            (median_v, "Median", "#0b0b0b", median_side),
+        ]:
+            fig.add_vline(
+                x=value,
+                line_color=color,
+                line_width=2,
+                line_dash="dash" if label == "Mean" else "solid",
+            )
+            fig.add_annotation(
+                x=value,
+                y=0.45,
+                text=f" {label} {value:.1f}% ",
+                showarrow=False,
+                yshift=8,
+                xanchor=side,
+                font={"color": "#52514e"},
+            )
+        fig.update_yaxes(visible=False, range=[-0.5, 0.6])
+        fig.update_xaxes(
+            title="Approved rate change (%) — one dot per company filing",
+            showgrid=True,
+            gridcolor=GRID,
+        )
+        st.plotly_chart(style(fig, 260), use_container_width=True)
+        st.caption(
+            "Each dot is one approved company filing (affiliates sharing a file number count separately; "
+            "unweighted by premium). The mean is pulled toward large increases; the median is the middle filing."
+        )
+    st.divider()
+    st.markdown((ROOT / "docs" / "docs" / "appendix.md").read_text())

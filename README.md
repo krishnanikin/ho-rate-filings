@@ -42,6 +42,11 @@ interrupted. Pass `--force` to `python -m ho_rate_filings.dataset download` to r
 
 These are associations in observational data, not causal effects. State-level results are ecological.
 
+**[Appendix](docs/docs/appendix.md)**: definitions (regimes, rate filing, outcomes, rejection rates,
+haircut, **mean vs median rate increase** with a worked example), every data source with links, the
+exact calculations and model specifications, and limitations. The same appendix is the dashboard's
+last tab, with a live mean-vs-median explorer.
+
 ## Data sources
 
 | Topic | Source | Coverage | Fields |
@@ -84,7 +89,7 @@ approval-time bins, the FIO premium data and the disaster/housing panel.
 
 ```
 ├── Makefile               <- `make pipeline`, `make dashboard`, `make test`, ...
-├── dashboard/app.py       <- Streamlit dashboard (7 tabs)
+├── dashboard/app.py       <- Streamlit dashboard (8 tabs, incl. Appendix)
 ├── data/
 │   ├── external/          <- state_regimes.csv, news_rate_reports.csv, market_actions.csv (curated), gao_approval_days.csv
 │   ├── raw/               <- cached downloads (git-ignored)
