@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from ho_rate_filings.config import STATES
+from ho_rate_filings.config import COMPANIES, STATES
 from ho_rate_filings.dataset import parse_damage, zip_to_state
 from ho_rate_filings.features import company_state_year
 from ho_rate_filings.reference import states as regimes
@@ -128,3 +128,56 @@ def test_parse_damage_and_zip_to_state():
     assert list(dmg) == [1e4, 1.5e6, 2e9, 0, 0]
     st = zip_to_state(pd.Series([1001, 33101, 90210, 75001, 20001, 99501]))
     assert list(st) == ["MA", "FL", "CA", "TX", "DC", "AK"]
+
+
+def test_curated_news_tables_are_valid():
+    from ho_rate_filings.reference import news
+
+    reports = news.news_rate_reports()
+    actions = news.market_actions()
+    assert reports["url"].str.startswith("https://").all()
+    assert actions["url"].str.startswith("https://").all()
+    assert pd.to_datetime(reports["news_date"]).notna().all()
+    assert pd.to_datetime(actions["start"]).notna().all()
+    assert set(actions["action"]) <= {
+        "pause_new", "cap_new", "restrict_new", "nonrenew", "exit", "resume"
+    }  # fmt: skip
+    groups = {"Other", *COMPANIES}
+    assert set(reports["group"]) <= groups
+    assert set(actions["group"]) <= groups
+
+
+def test_news_crosscheck_matches_interim_and_flags_differences():
+    from ho_rate_filings.features import news_crosscheck
+
+    filings = pd.DataFrame(
+        {
+            "state": ["CA", "CA", "CA"],
+            "filing_id": ["24-1271", "24-1330", "23-613"],
+            "company": ["STATE FARM GENERAL INSURANCE COMPANY"] * 3,
+            "received_date": pd.to_datetime(["2024-07-08", "2024-07-15", "2023-03-20"]),
+            "closed_date": pd.to_datetime(["2026-09-03", "2026-08-07", "2023-12-22"]),
+            "requested_pct": [30.0, 38.0, 28.1],
+            "approved_pct": [17.0, 32.8, 20.0],
+        }
+    )
+    reports = pd.DataFrame(
+        {
+            "state": ["CA", "CA", "TX"],
+            "group": ["State Farm"] * 3,
+            "company_pattern": ["STATE FARM GENERAL", "STATE FARM GENERAL", "STATE FARM LLOYDS"],
+            "news_date": ["2025-05-13", "2025-05-13", "2023-06-30"],
+            "news_requested_pct": [21.8, None, None],
+            "news_approved_pct": [17.0, 38.0, 7.6],
+            "headline": ["x", "State Farm rental-dwelling emergency increase of 38%", "y"],
+            "source": ["s"] * 3,
+            "url": ["https://a"] * 3,
+        }
+    )
+    out = news_crosscheck(filings, reports)
+    # Interim approval: closed > 15 months after the report, but received within the window.
+    assert out.loc[0, "filing_id"] == "24-1271"
+    assert out.loc[0, "match_status"] == "Exact match"
+    assert out.loc[1, "match_status"] == "Different value"
+    assert out.loc[1, "note"]
+    assert out.loc[2, "match_status"] == "No filing found"

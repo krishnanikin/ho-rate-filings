@@ -36,6 +36,7 @@ from ho_rate_filings.config import (
     STATE_ABBR,
     STATES,
 )
+from ho_rate_filings.reference import news as news_ref
 from ho_rate_filings.reference import states as regimes
 from ho_rate_filings.sources import california, florida, texas
 from ho_rate_filings.sources.common import get_cached
@@ -356,6 +357,7 @@ def process():
 
     regimes.build().to_csv(EXTERNAL_DATA_DIR / "state_regimes.csv", index=False)
     gao_benchmark().to_csv(EXTERNAL_DATA_DIR / "gao_approval_days.csv", index=False)
+    news_ref.main()
 
     tx = texas.clean(raw / "tx" / "tx_tdi_rate_filings.csv")
     fl = florida.clean(sorted((raw / "fl").glob("fl_irfs_homeowners_rates_*.json")))

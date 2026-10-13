@@ -3,6 +3,9 @@
 !/data/*/.gitkeep
 !/data/external/state_regimes.csv
 !/data/external/gao_approval_days.csv
+!/data/external/news_rate_reports.csv
+!/data/external/news_market_context.csv
+!/data/external/market_actions.csv
 
 # Mac OS-specific storage files
 .DS_Store

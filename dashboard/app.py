@@ -90,6 +90,10 @@ def load(version: float) -> dict[str, pd.DataFrame]:
         "panel": pd.read_parquet(p / "state_year.parquet"),
         "regimes": pd.read_csv(EXTERNAL_DATA_DIR / "state_regimes.csv"),
         "gao": pd.read_csv(EXTERNAL_DATA_DIR / "gao_approval_days.csv"),
+        "news": pd.read_parquet(p / "news_crosscheck.parquet"),
+        "pullback": pd.read_parquet(p / "pullback_context.parquet"),
+        "actions": pd.read_csv(EXTERNAL_DATA_DIR / "market_actions.csv"),
+        "market_news": pd.read_csv(EXTERNAL_DATA_DIR / "news_market_context.csv"),
     }
     for name in [
         "period_comparison",
@@ -147,6 +151,7 @@ tabs = st.tabs(
         "Overview",
         "States & regimes",
         "Company comparison",
+        "News & pullbacks",
         "Pre vs post COVID",
         "Disasters & housing",
         "Data & methods",
@@ -468,9 +473,244 @@ with tabs[2]:
     )
 
 # ---------------------------------------------------------------------------
-# 4. Pre vs post COVID
+# 4. News cross-check and market pullbacks
 # ---------------------------------------------------------------------------
+ACTION_LABELS = {
+    "pause_new": "Paused new business",
+    "cap_new": "Capped new business",
+    "restrict_new": "Restricted new business",
+    "nonrenew": "Non-renewals",
+    "exit": "Exit / withdrawal",
+    "resume": "Resumed / lifted cap",
+}
+ACTION_COLORS = dict(zip(ACTION_LABELS.values(), SLOTS[:6]))
+
 with tabs[3]:
+    news = D["news"]
+    st.subheader("Do the filings match what the news reported?")
+    k = st.columns(3)
+    k[0].metric("News reports checked", len(news))
+    k[1].metric(
+        "Exact match in regulator data", int((news["match_status"] == "Exact match").sum())
+    )
+    k[2].metric("Differences (explained)", int((news["match_status"] != "Exact match").sum()))
+
+    nn = news.assign(
+        label=news["state"]
+        + " · "
+        + news["company_pattern"].str.title()
+        + " · "
+        + news["news_date"].str[:7]
+    )
+    fig = go.Figure()
+    for _, r in nn.iterrows():
+        fig.add_trace(
+            go.Scatter(
+                x=[r["news_approved_pct"], r["filing_approved_pct"]],
+                y=[r["label"], r["label"]],
+                mode="lines",
+                line={"color": "#c3c2b7", "width": 2},
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=nn["news_approved_pct"],
+            y=nn["label"],
+            mode="markers",
+            name="Reported in news",
+            marker={"size": 13, "color": "rgba(0,0,0,0)", "line": {"color": SLOTS[1], "width": 2}},
+            customdata=nn[["source"]],
+            hovertemplate="%{y}<br>News: %{x:.1f}%<br>%{customdata[0]}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=nn["filing_approved_pct"],
+            y=nn["label"],
+            mode="markers",
+            name="Approved in filing data",
+            marker={"size": 8, "color": SLOTS[0]},
+            customdata=nn[["filing_id"]],
+            hovertemplate="%{y}<br>Filing %{customdata[0]}: %{x:.1f}%<extra></extra>",
+        )
+    )
+    fig.update_xaxes(title="Approved rate change (%)", showgrid=True, gridcolor=GRID)
+    st.plotly_chart(style(fig, 460), use_container_width=True)
+    st.caption(
+        "Open ring = figure in the news report; filled dot = approved change in the regulator's record. Overlap = match."
+    )
+    st.dataframe(
+        news[
+            [
+                "state",
+                "headline",
+                "news_requested_pct",
+                "news_approved_pct",
+                "filing_id",
+                "filing_requested_pct",
+                "filing_approved_pct",
+                "filing_closed",
+                "match_status",
+                "note",
+                "url",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "headline": st.column_config.TextColumn("News report", width="large"),
+            "news_requested_pct": st.column_config.NumberColumn(
+                "News: requested %", format="%.1f"
+            ),
+            "news_approved_pct": st.column_config.NumberColumn("News: approved %", format="%.1f"),
+            "filing_id": "Filing",
+            "filing_requested_pct": st.column_config.NumberColumn(
+                "Filing: requested %", format="%.1f"
+            ),
+            "filing_approved_pct": st.column_config.NumberColumn(
+                "Filing: approved %", format="%.1f"
+            ),
+            "filing_closed": st.column_config.DateColumn("Filing closed"),
+            "match_status": "Result",
+            "note": st.column_config.TextColumn("Note", width="medium"),
+            "url": st.column_config.LinkColumn("Source", display_text="link"),
+        },
+    )
+    st.markdown("**Market-wide reports (context; not matchable to single filings)**")
+    for _, r in D["market_news"].iterrows():
+        st.markdown(
+            f"- {r['state']} · {r['news_date'][:7]} — {r['headline']} ([{r['source']}]({r['url']}))"
+        )
+
+    st.subheader("Companies pulling back from writing homeowners insurance")
+    act = D["actions"].copy()
+    today = pd.Timestamp.today().normalize()
+    act["Action"] = act["action"].map(ACTION_LABELS)
+    act["start_dt"] = pd.to_datetime(act["start"])
+    # Ongoing actions run to today; one-off events (resume) get a short marker.
+    act["end_dt"] = pd.to_datetime(act["end"]).fillna(today)
+    act.loc[act["action"] == "resume", "end_dt"] = act["start_dt"] + pd.Timedelta(days=45)
+    # A non-renewal wave with no reported end is drawn over the following 12 months.
+    wave = (act["action"] == "nonrenew") & act["end"].isna()
+    act.loc[wave, "end_dt"] = act.loc[wave, "start_dt"] + pd.Timedelta(days=365)
+    act["row"] = act["company"] + " · " + act["state"]
+    act["policies"] = act["policies_affected"].map(
+        lambda v: "" if pd.isna(v) else f"{int(v):,} policies"
+    )
+    show_other = st.toggle("Include insurers outside the top 10", value=True)
+    if not show_other:
+        act = act[act["top10"]]
+    order = act.sort_values("start_dt").drop_duplicates("row")["row"].tolist()
+    fig = px.timeline(
+        act,
+        x_start="start_dt",
+        x_end="end_dt",
+        y="row",
+        color="Action",
+        color_discrete_map=ACTION_COLORS,
+        category_orders={"row": order, "Action": list(ACTION_LABELS.values())},
+        hover_data={
+            "detail": True,
+            "policies": True,
+            "source": True,
+            "row": False,
+            "start_dt": "|%b %Y",
+            "end_dt": False,
+        },
+    )
+    fig.update_traces(marker_line_color="white", marker_line_width=2)
+    # Overlay the same groups' approved California rate changes (decision dates).
+    ca_rate = filings[
+        (filings["state"] == "CA")
+        & filings["is_rate"].fillna(False)
+        & filings["approved_pct"].gt(0)
+        & filings["closed_date"].ge("2020-01-01")
+    ]
+    for row, grp in (
+        act[act["state"] == "CA"].drop_duplicates("row")[["row", "group"]].itertuples(index=False)
+    ):
+        g = ca_rate[ca_rate["group"] == grp]
+        if g.empty or grp == "Other":
+            continue
+        fig.add_trace(
+            go.Scatter(
+                x=g["closed_date"],
+                y=[row] * len(g),
+                mode="markers",
+                marker={
+                    "symbol": "diamond",
+                    "size": 6 + g["approved_pct"].clip(0, 40) / 2,
+                    "color": "#0b0b0b",
+                    "line": {"color": "white", "width": 1},
+                },
+                name="Approved CA rate increase",
+                legendgroup="rate",
+                showlegend=bool(row == act[act["state"] == "CA"]["row"].iloc[0]),
+                customdata=g[["company", "approved_pct"]],
+                hovertemplate="%{customdata[0]}<br>Approved %{customdata[1]:.1f}% on %{x|%b %d, %Y}<extra></extra>",
+            )
+        )
+    fig.add_vline(x=today, line_dash="dot", line_color=MUTED)
+    fig.update_yaxes(autorange="reversed", title=None)
+    st.plotly_chart(style(fig, 520), use_container_width=True)
+    st.caption(
+        "Bars run from announcement to end (or to today if still in force; non-renewal waves without a "
+        "reported end span 12 months). Diamonds = approved California "
+        "homeowners rate increases for the same group since 2020 (size ~ % approved). Hover for details and sources."
+    )
+
+    st.markdown(
+        "**Rate approvals around each top-10 pullback (same state, 2 years before vs after)**"
+    )
+    pb = D["pullback"].assign(action=lambda d: d["action"].map(ACTION_LABELS))
+    st.dataframe(
+        pb,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "start": "Date",
+            "filings_2y_before": "Rate filings decided, 2y before",
+            "filings_2y_after": "Rate filings decided, 2y after",
+            "mean_approved_pct_before": st.column_config.NumberColumn(
+                "Mean approved %, before", format="%.1f"
+            ),
+            "mean_approved_pct_after": st.column_config.NumberColumn(
+                "Mean approved %, after", format="%.1f"
+            ),
+            "max_approved_pct_after": st.column_config.NumberColumn(
+                "Largest approved %, after", format="%.1f"
+            ),
+        },
+    )
+
+    st.subheader("Non-renewal rates by state (FIO, 2018–2022)")
+    nr = panel[panel["fio_nonrenewal"].notna()][["state", "year", "fio_nonrenewal"]]
+    focus = ["CA", "FL", "TX", "LA", "NC"]
+    nat = nr.groupby("year", as_index=False)["fio_nonrenewal"].median().assign(state="US median")
+    nr = pd.concat([nr[nr["state"].isin(focus)], nat])
+    nr["fio_nonrenewal"] *= 100
+    fig = px.line(
+        nr,
+        x="year",
+        y="fio_nonrenewal",
+        color="state",
+        markers=True,
+        color_discrete_map={**dict(zip(focus, SLOTS[:5])), "US median": MUTED},
+        labels={"fio_nonrenewal": "Non-renewal rate (%)"},
+    )
+    fig.update_xaxes(dtick=1)
+    st.plotly_chart(style(fig, 340, "Median ZIP non-renewal rate (%)"), use_container_width=True)
+    st.caption(
+        "Insurer-initiated non-renewals as a share of policies, median across ZIP codes (Federal Insurance "
+        "Office). FIO data end in 2022; NAIC data reported in the news show non-renewals rose ~61% in 2024."
+    )
+
+# ---------------------------------------------------------------------------
+# 5. Pre vs post COVID
+# ---------------------------------------------------------------------------
+with tabs[4]:
     st.subheader(f"Before ({START_YEAR}–{COVID_BREAK - 1}) vs after ({COVID_BREAK}–{max_year})")
     pc = D["period_comparison"]
     if not pc.empty:
@@ -562,9 +802,9 @@ with tabs[3]:
     st.plotly_chart(style(fig, 340, "Year-over-year change (%)"), use_container_width=True)
 
 # ---------------------------------------------------------------------------
-# 5. Disasters & housing
+# 6. Disasters & housing
 # ---------------------------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     st.subheader("Is there a connection?")
     coefs = D["driver_models"]
     if not coefs.empty:
@@ -684,9 +924,9 @@ with tabs[4]:
     )
 
 # ---------------------------------------------------------------------------
-# 6. Data & methods
+# 7. Data & methods
 # ---------------------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     st.subheader("Coverage")
     cov = filings.groupby(["state", "year"]).size().unstack("year").fillna(0).astype(int)
     st.dataframe(cov, use_container_width=True)
@@ -700,6 +940,7 @@ with tabs[5]:
 | California filings | CDI rate-filing approvals lists (2016–18 via Internet Archive) + WARFF public notices | CA | Requested & approved %, status, closed date; notice date = received |
 | Approval-time benchmark | GAO-26-107867 fig. 4 | 51 (binned) | 2020–2024 medians |
 | Premium, loss ratio, non-renewal | FIO ZIP-level data 2018–2022 | 51 | Median across ZIP codes |
+| News reports & pullbacks | Hand-curated news coverage (source link per row) | CA, TX, FL, NC | Matched to filings: same company, approved % within 1 pt, within 15 months |
 | Disasters | NOAA Storm Events (property damage), OpenFEMA | 51 | 2014– |
 | Housing / macro | FHFA HPI, FRED (mortgage rate, PPI construction inputs, CPI) | 51 | |
 

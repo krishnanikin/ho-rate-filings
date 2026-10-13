@@ -27,6 +27,7 @@ from ho_rate_filings.config import (
     START_YEAR,
     STATES,
 )
+from ho_rate_filings.reference import news as news_ref
 
 app = typer.Typer()
 
@@ -199,6 +200,90 @@ def state_year_panel(
     return panel
 
 
+# Explanations for reports whose figure legitimately differs from the filing record.
+NEWS_NOTES = {
+    "State Farm rental-dwelling emergency": (
+        "News reported the 38% interim emergency rate (May 2025); the filing closed in Aug "
+        "2026 at 32.8% after the full rate hearing."
+    ),
+}
+MATCH_WINDOW_DAYS = 456  # ~15 months between a news report and the filing's decision
+EXACT_PTS, CLOSE_PTS = 0.15, 1.0
+
+
+def news_crosscheck(filings: pd.DataFrame, news: pd.DataFrame) -> pd.DataFrame:
+    """Match each news-reported rate change to the closest filing in the regulator data."""
+    rows = []
+    approved = filings[filings["approved_pct"].notna()].copy()
+    approved["decision_date"] = approved["closed_date"].fillna(approved["received_date"])
+    for _, n in news.iterrows():
+        when = pd.Timestamp(n["news_date"])
+        cand = approved[
+            (approved["state"] == n["state"])
+            & approved["company"].str.upper().str.contains(n["company_pattern"], regex=False)
+        ].copy()
+        # Interim approvals can precede the filing's formal close by months, so measure the
+        # gap from whichever filing date (received or closed) is nearer the report.
+        gap = pd.concat(
+            [(cand["received_date"] - when).abs(), (cand["closed_date"] - when).abs()], axis=1
+        ).min(axis=1)
+        cand = cand[gap.dt.days <= MATCH_WINDOW_DAYS]
+        rec = n.to_dict()
+        if cand.empty:
+            rec["match_status"] = "No filing found"
+            rows.append(rec)
+            continue
+        cand["diff"] = (cand["approved_pct"] - n["news_approved_pct"]).abs()
+        cand["gap_days"] = gap[cand.index].dt.days
+        best = cand.sort_values(["diff", "gap_days"]).iloc[0]
+        rec.update(
+            {
+                "filing_id": best["filing_id"],
+                "filing_company": best["company"],
+                "filing_received": best["received_date"],
+                "filing_closed": best["closed_date"],
+                "filing_requested_pct": best["requested_pct"],
+                "filing_approved_pct": best["approved_pct"],
+                "diff_pts": best["approved_pct"] - n["news_approved_pct"],
+                "match_status": "Exact match"
+                if best["diff"] <= EXACT_PTS
+                else "Within 1 point"
+                if best["diff"] <= CLOSE_PTS
+                else "Different value",
+                "note": next(
+                    (v for k, v in NEWS_NOTES.items() if n["headline"].startswith(k)), ""
+                ),
+            }
+        )
+        rows.append(rec)
+    return pd.DataFrame(rows)
+
+
+def pullback_context(filings: pd.DataFrame, actions: pd.DataFrame) -> pd.DataFrame:
+    """Each top-10 pullback in a filing state: the group's rate filings 2 years before vs after."""
+    rows = []
+    rate = filings[filings["is_rate"].fillna(False)].copy()
+    rate["decision_date"] = rate["closed_date"].fillna(rate["received_date"])
+    for _, a in actions[
+        actions["top10"] & actions["state"].isin(rate["state"].unique())
+    ].iterrows():
+        t0 = pd.Timestamp(a["start"])
+        g = rate[(rate["state"] == a["state"]) & (rate["group"].astype(str) == a["group"])]
+        before = g[g["decision_date"].between(t0 - pd.DateOffset(years=2), t0)]
+        after = g[g["decision_date"].between(t0, t0 + pd.DateOffset(years=2))]
+        rows.append(
+            {
+                **a[["state", "group", "company", "action", "start"]].to_dict(),
+                "filings_2y_before": len(before),
+                "filings_2y_after": len(after),
+                "mean_approved_pct_before": before["approved_pct"].mean(),
+                "mean_approved_pct_after": after["approved_pct"].mean(),
+                "max_approved_pct_after": after["approved_pct"].max(),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 @app.command()
 def main():
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -214,6 +299,12 @@ def main():
     panel = state_year_panel(drivers, regimes, filings)
     panel.to_parquet(PROCESSED_DATA_DIR / "state_year.parquet", index=False)
     regimes.to_parquet(PROCESSED_DATA_DIR / "state_regimes.parquet", index=False)
+    cross = news_crosscheck(filings, news_ref.news_rate_reports())
+    cross.to_parquet(PROCESSED_DATA_DIR / "news_crosscheck.parquet", index=False)
+    pullback_context(filings, news_ref.market_actions()).to_parquet(
+        PROCESSED_DATA_DIR / "pullback_context.parquet", index=False
+    )
+    logger.info(f"news cross-check: {cross['match_status'].value_counts().to_dict()}")
     logger.success(
         f"features: {len(filings):,} filings, {filings['top10'].sum():,} top-10; panel {panel.shape}"
     )

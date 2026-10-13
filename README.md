@@ -37,6 +37,8 @@ interrupted. Pass `--force` to `python -m ho_rate_filings.dataset download` to r
 | Disasters | Each extra **$100 of storm property damage per resident** in the prior year goes with a **+0.24-point** larger approved rate change (CA + TX, p = 0.01, state and group fixed effects). Across all 51 jurisdictions (FIO 2018–22), damage drives same-year **loss ratios** (+0.09 per $1,000/resident, p < 0.001) and next-year **premium growth** (+0.9 points per $1,000/resident, p = 0.04). |
 | Housing / costs | Approved changes stepped up by **~5 points after 2020** even after controlling for disasters — the period when construction input prices rose ~17% a year (2021–22) and home values surged. Year-by-year construction-price growth is not separately significant because it moves almost one-for-one with the post-2020 shift; prior-year house-price growth is borderline (p ≈ 0.06–0.08). |
 | Regime vs outcomes | In the FIO panel, regime has **no detectable effect** on premium growth, loss ratios or non-renewals once disasters are controlled for. Regulation changes **timing and size of increments**, not the direction. |
+| News cross-check | Of 11 rate changes reported in the press (SF Chronicle/Sac Bee, CBS, ABC7, Insurance Business, Newsweek, S&P Global), **10 match the regulator data exactly** — e.g. State Farm CA 28.1% asked → 20.0% approved (Dec 2023), 17% emergency increase (2025); Allstate CA 34.1% (Aug 2024); USAA's four CA companies 16.8–30.6%; Farmers CA 7.0% → 1.5% (2026); Allstate TX 24.1% and State Farm Lloyds 7.6% (2023). The one difference is explained: the 38% State Farm rental-dwelling figure was the 2025 interim rate; the filing closed at 32.8%. |
+| Market pullbacks | California's largest writers stopped or limited new business one after another — Chubb (Oct 2021), Allstate (Nov 2022), USAA Casualty (Apr 2023), State Farm (May 2023, still paused), Farmers' 7,000/month cap (Jul 2023), Nationwide's Crestbrook exit (Dec 2023 → Jun 2025), State Farm's ~30,000 non-renewals (Jul 2024). The biggest approved increases (20–34%) came **after** the pauses: e.g. USAA averaged 2.3% approved in the two years before its pause vs 19.8% after; State Farm 6.9% → 15.7%. Farmers lifted its cap in Nov 2025 after the Sustainable Insurance Strategy. In Florida, Farmers withdrew its own brand (Jul 2023) while statewide increases fell from ~9.6% (2023) to ~1% (2024–25). |
 
 These are associations in observational data, not causal effects. State-level results are ecological.
 
@@ -50,6 +52,7 @@ These are associations in observational data, not causal effects. State-level re
 | California filings | CDI [rate filing approvals](https://www.insurance.ca.gov/0250-insurers/0800-rate-filings/0100-rate-filing-lists/rate-filing-approvals/) (2016–18 via Internet Archive) + [WARFF](https://interactive.web.insurance.ca.gov/apex_extprd/f?p=186) public notices | CA | Requested & approved %, status, closed date, notice (≈ received) date |
 | Approval-time benchmark | [GAO-26-107867](https://files.gao.gov/reports/GAO-26-107867/index.html) fig. 4 | 51 (binned) | Median days 2020–24 |
 | Premiums, loss ratios, non-renewals | FIO ZIP-level metrics 2018–22 ([re-hosted by CFA](https://consumerfed.org/)) | 51 | Median across ZIPs |
+| News reports & market pullbacks | Hand-curated from news coverage, one source link per row (`ho_rate_filings/reference/news.py`) | CA, TX, FL, NC | Reported requested/approved %, pauses, caps, non-renewals, exits |
 | Disasters | NOAA [Storm Events](https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/), [OpenFEMA](https://www.fema.gov/about/openfema/data-sets) | 51 | Property damage by peril, major declarations, assistance |
 | Housing & macro | [FHFA HPI](https://www.fhfa.gov/data/hpi), FRED (mortgage rate, PPI residential construction inputs, CPI shelter & household insurance, state population & homeownership) | 51 | |
 
@@ -72,15 +75,18 @@ approval-time bins, the FIO premium data and the disaster/housing panel.
 - **Florida** search results carry no % changes (they are in documents behind a CAPTCHA, not automated).
 - **California** received date = WARFF public-notice date (posted shortly after receipt), matched for
   96% of filings. Two single days with more than 50 notices lost their overflow rows.
+- **News cross-check**: each report is matched to the filing with the same state and company, approved %
+  within 1 point, and received or closed within 15 months of the report. The pullback list covers events
+  reported in the press; it is not a complete census of insurer actions.
 - The FIO regime classification (2018–22) is applied to the whole 2016–26 window.
 
 ## Project organization
 
 ```
 ├── Makefile               <- `make pipeline`, `make dashboard`, `make test`, ...
-├── dashboard/app.py       <- Streamlit dashboard (6 tabs)
+├── dashboard/app.py       <- Streamlit dashboard (7 tabs)
 ├── data/
-│   ├── external/          <- state_regimes.csv (curated), gao_approval_days.csv
+│   ├── external/          <- state_regimes.csv, news_rate_reports.csv, market_actions.csv (curated), gao_approval_days.csv
 │   ├── raw/               <- cached downloads (git-ignored)
 │   ├── interim/           <- tidy tables per source
 │   └── processed/         <- filings, company_state_year, state_year panel
